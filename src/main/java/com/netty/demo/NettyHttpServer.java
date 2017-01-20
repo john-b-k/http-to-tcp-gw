@@ -39,15 +39,16 @@ public class NettyHttpServer {
 			boot.option(ChannelOption.SO_BACKLOG, 1024);
 			boot.group(parentGroup, workerGroup)
 				.channel(NioServerSocketChannel.class)
-				.handler(new LoggingHandler(LogLevel.INFO))
-				.childHandler(new HttpServerInitializer());
+				.handler(new LoggingHandler(LogLevel.DEBUG))
+				.childHandler(new HttpServerInitializer());//.childOption(ChannelOption.SO_KEEPALIVE,true);
 			
 			Channel channel = boot.bind(PORT).sync().channel();
 			
 			channel.closeFuture().sync();
 		} finally {
-			
-			
+
+			parentGroup.shutdownGracefully();
+			workerGroup.shutdownGracefully();
 			
 		}
 	}
@@ -59,6 +60,9 @@ class HttpServerInitializer extends ChannelInitializer<SocketChannel> {
 	protected void initChannel(SocketChannel ch) throws Exception {
 		// TODO Auto-generated method stub
 		ChannelPipeline pipe = ch.pipeline();
+
+		/*pipe.addLast(new HttpRequestDecoder());
+		pipe.addLast(new HttpResponseEncoder());*/
 		pipe.addLast("decoder", new HttpRequestDecoder(4096, 8192, 8192, false));
 		pipe.addLast("aggregator", new HttpObjectAggregator(100 * 1024 * 1024));
 		pipe.addLast("encoder", new HttpResponseEncoder());
@@ -70,8 +74,9 @@ class HttpServerInitializer extends ChannelInitializer<SocketChannel> {
 class MyHttpServerHandler extends ChannelHandlerAdapter {
 	@Override
 	public void channelReadComplete(ChannelHandlerContext context) {
-		System.out.println("Http Channel Read");
+		System.out.println("Http Channel Read Complete");
 		context.flush();
+	//	context.close();
 	}
 	
 	@Override
@@ -82,21 +87,21 @@ class MyHttpServerHandler extends ChannelHandlerAdapter {
 	
 	@Override
 	public void channelRead(final ChannelHandlerContext httpServerContext, Object message) {
-		FullHttpRequest req = (FullHttpRequest) message;
-		String dataFromUser = req.content().toString(Charset.defaultCharset());
-		System.out.println("HTTP Server Recieve Data From User : "+dataFromUser);
-	
-		NettyTcpClient client = new NettyTcpClient();
-		client.call(req, new TcpSendCallback(){
+		FullHttpRequest request = (FullHttpRequest) message;
 
-			@Override
+		String dataFromUser = request.content().toString(Charset.defaultCharset());
+		System.out.println("HTTP Server Recieve Data From User : "+dataFromUser);
+
+		NettyTcpClient client = new NettyTcpClient();
+		client.call(request, new TcpSendCallback(){
+
 			public void onSuccess(String responseFromVan) {
 				// TODO Auto-generated method stub
 				FullHttpResponse response = new DefaultFullHttpResponse(
-						HttpVersion.HTTP_1_1,
-						HttpResponseStatus.OK, 
-						Unpooled.wrappedBuffer(responseFromVan.getBytes()),
-						false);
+																																HttpVersion.HTTP_1_1,
+																																HttpResponseStatus.OK,
+																																Unpooled.wrappedBuffer(responseFromVan.getBytes()),
+																																false);
 				
 				response.headers().set(new AsciiString("content-type"), "text/plain");
 				response.headers().set(new AsciiString("custom-header"), "doyoon");
@@ -104,15 +109,15 @@ class MyHttpServerHandler extends ChannelHandlerAdapter {
 				
 				System.out.println("Http Response Data Writing start");
 				//We can see data in Browser for this code.
-				httpServerContext.write(response).addListener(ChannelFutureListener.CLOSE);
+				//write쓰면 안됨 (계속 keep alive 되는듯ㅜ writeAndFlush때문 고생
+				httpServerContext.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
 			//	httpServerContext.flush();
 				System.out.println("Http Response Data Writing end");
 			}
 		});
+
 		
-		
-		/*
-		FullHttpResponse response = new DefaultFullHttpResponse(
+		/*FullHttpResponse response = new DefaultFullHttpResponse(
 				HttpVersion.HTTP_1_1,
 				HttpResponseStatus.OK, 
 				Unpooled.wrappedBuffer(dataFromUser.getBytes()),
@@ -121,12 +126,11 @@ class MyHttpServerHandler extends ChannelHandlerAdapter {
 		response.headers().set(new AsciiString("content-type"), "text/plain");
 		response.headers().set(new AsciiString("custom-header"), "doyoon");
 		
-		httpServerContext.write(response).addListener(ChannelFutureListener.CLOSE);
-		*/
+		httpServerContext.write(response).addListener(ChannelFutureListener.CLOSE);*/
 		//context.flush();
 	}
 	
-	public static interface TcpSendCallback {
-		public void onSuccess(String message);
+	public interface TcpSendCallback {
+		void onSuccess(String message);
 	}
 }

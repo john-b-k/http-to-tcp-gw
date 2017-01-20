@@ -19,9 +19,10 @@ import io.netty.util.CharsetUtil;
 
 public class NettyTcpClient {
 
+
 	public static final int TARGET_PORT = 8880;
 	public void call(FullHttpRequest request, TcpSendCallback callback) {
-		
+
 		try{
 			loadTcpClient(request, callback);
 		} catch (Exception e) {
@@ -29,7 +30,7 @@ public class NettyTcpClient {
 		}
 	}
 	
-	public void loadTcpClient(FullHttpRequest request, TcpSendCallback callback) throws InterruptedException {
+	public void loadTcpClient(final FullHttpRequest request, final TcpSendCallback callback) throws InterruptedException {
 		EventLoopGroup loop = new NioEventLoopGroup();
 		
 		try {
@@ -57,6 +58,7 @@ public class NettyTcpClient {
 class MyTcpClientHandler extends ChannelHandlerAdapter {
 	FullHttpRequest request;
 	TcpSendCallback callback;
+
 	public MyTcpClientHandler(FullHttpRequest request, TcpSendCallback callback) {
 		this.request = request;
 		this.callback = callback;
@@ -77,11 +79,12 @@ class MyTcpClientHandler extends ChannelHandlerAdapter {
 	@Override
 	public void channelRead(ChannelHandlerContext context, Object message) {
 		String dataFromVan = ((ByteBuf) message).toString(CharsetUtil.UTF_8);
-		
+
 		System.out.println("Read Data From Van via TCP : "+dataFromVan);
-		
-		
+
 		//channelReadComplete(context);
+		context.close();
+		context.disconnect();
 		callback.onSuccess(dataFromVan);
 		System.out.println("onSuccess finished (response http)");
 	}
