@@ -83,8 +83,6 @@ class MyTcpClientHandler extends ChannelHandlerAdapter {
 		System.out.println("Read Data From Van via TCP : "+dataFromVan);
 
 		//channelReadComplete(context);
-		context.close();
-		context.disconnect();
 		callback.onSuccess(dataFromVan);
 		System.out.println("onSuccess finished (response http)");
 	}
